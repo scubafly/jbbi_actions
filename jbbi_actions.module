@@ -1,0 +1,162 @@
+<?php
+
+/**
+ * trigger mail action upon wergever registration and publishing vacancies
+ * version 1.0-beta
+ */
+
+/**
+ * Implements hook_user_insert(&$edit, $account, $category)
+ */
+function jbbi_actions_user_insert(&$edit, $account, $category) {
+  // basicly only calls the mail function now ;)
+  jbbi_actions_send_mail($account, $action = 'user_insert');
+}
+
+// werkt alleen voor een update van een vacature?
+/**
+ * trigger mail action upon edited node
+ */
+// function jbbi_actions_node_update($node) {
+//   global $user;
+//   // check if type really is vacature
+//   if($node->type == 'vacature') {
+//     // get user rol by $node->uid
+//     // and node owner has role werkgever
+//     if($node->original->status == 1 && $node->status == 0) {
+//       // node is depublished
+//     }
+
+//     if($node->original->status == 0 && $node->status == 1) {
+//       // node is published
+//       // send mail to $site->mail
+//       jbbi_actions_send_mail($user, $action = 'vacancy_published', $node);
+//     }
+//   }
+// }
+
+/**
+ * trigger mail action upon inserted node
+ * Implement hook_node_insert
+ */
+function jbbi_actions_node_insert($node) {
+  global $user;
+
+  if($node->type == 'vacature') {
+    jbbi_actions_send_mail($user, $action = 'vacancy_published', $node);
+  }
+}
+
+/*
+ * set up the email and call hook_mail() by calling the drupal_mail() function.
+ */
+function jbbi_actions_send_mail($account, $action, $node = NULL) {
+  global $base_url;
+  // specify module name and template key for hook_mail
+  $language = language_default();
+  $module = 'jbbi_actions';
+  // specify to and from address ( can be overwritten per mail action )
+  $to = variable_get('site_mail', 'info@branche-vacatures.nl');
+  $from = variable_get('site_mail', 'info@branche_vacatures.nl');
+  $send = TRUE; // again can be overwritten per mail action default = TRUE can be set to FALSE to not actually send the mail and only generate it.
+
+  switch ($action) {
+    case 'user_insert':
+      if(isset($account->profile_werkgever)) {
+
+        $params['base_url'] = $base_url;
+
+        $params['profilelink'] = $base_url.'/user/'.$account->uid;
+        // user mail adress:
+        $params['mailadress'] = $account->mail;
+        // user name:
+        $params['name'] = $account->name;
+        // achternaam
+        $params['lastname'] = (string)$account->profile_werkgever['field_achternaam']['und'][0]['value'];
+        // bedrijfsnaam:
+        $params['bedrijfsnaam'] = (string)$account->profile_werkgever['field_bedrijfsnaam']['und'][0]['value'];
+        // website email (to)
+        // language
+
+        // mailtemplate key
+        $key = 'jbbi_actions_werkgever_register';
+
+        drupal_mail($module, $key, $to, $language, $params, $from, $send );
+      }
+      break;
+
+    case 'vacancy_published':
+      if(in_array('Werkgever',$account->roles)) {
+      // if(isset($account->profile_werkgever)) {
+        $params['base_url'] = $base_url;
+        $params['bedrijfsnaam'] = $account->name; // change to bedrijfsnaam later on.. ?
+        $params['vacature'] = $node->title;
+
+        $key = 'jbbi_actions_werkgever_publish_vacature';
+
+        drupal_mail($module, $key, $to, $language, $params, $from, $send );
+      }
+      break;
+  }
+
+}
+
+/**
+ * Implement hook_mail().
+ */
+function jbbi_actions_mail($key, &$message, $params) {
+  $options = array(
+    'langcode' => $message['language']->language,
+  );
+  switch ($key) {
+    case 'jbbi_actions_werkgever_register':
+      $message['headers']['Content-Type'] = 'text/html; charset=UTF-8;';
+      $message['subject'] = t('!bedrijfsnaam registreerde zich als werkgever.',
+        array(
+          '!bedrijfsnaam' => $params['bedrijfsnaam'],
+          '!base_url' => $params['base_url'],
+          )
+        );
+      // body needs to be replaced
+      $body[] = '!name !lastname registreerde zich op !base_url <br /><br />';
+      $body[] = '!bedrijfsnaam gebruikte hiervoor het volgende email adres: !mailadress <br /><br />';
+      $body[] = 'Link naar het profiel: !profilelink <br /><br />';
+
+      foreach($body as $message_body){
+        $message['body'][] = t($message_body, array(
+          '!name' => $params['name'],
+          '!lastname' => $params['lastname'],
+          '!bedrijfsnaam' => $params['bedrijfsnaam'],
+          '!profilelink' => $params['profilelink'],
+          '!mailadress' => $params['mailadress'],
+          '!base_url' => $params['base_url'],
+          ),
+        $options);
+      }
+      break;
+    case 'jbbi_actions_werkgever_publish_vacature':
+      $message['headers']['Content-Type'] = 'text/html; charset=UTF-8;';
+      $message['subject'] = t('!bedrijfsnaam publiceerde vacature.',
+        array(
+          '!bedrijfsnaam' => $params['bedrijfsnaam'],
+          '!base_url' => $params['base_url'],
+          )
+        );
+      // body needs to be replaced
+      $body[] = '!vacature is gepubliceerd door !bedrijfsnaam<br /><br />';
+
+      foreach($body as $message_body){
+        $message['body'][] = t($message_body, array(
+          // '!name' => $params['name'],
+          // '!lastname' => $params['lastname'],
+          '!bedrijfsnaam' => $params['bedrijfsnaam'],
+          // '!profilelink' => $params['profilelink'],
+          // '!mailadress' => $params['mailadress'],
+          '!base_url' => $params['base_url'],
+          '!vacature' => $params['vacature'],
+          ),
+        $options);
+      }
+      break;
+  }
+}

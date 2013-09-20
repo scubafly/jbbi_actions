@@ -1,0 +1,6 @@
+name = Jbbi actions
+description = creating some custom triggers.
+core = 7.x
+package = jbbi
+files[] = jbbi_actions.module
+version = 7.x-1.0-beta
